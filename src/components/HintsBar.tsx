@@ -3,7 +3,7 @@ import { Glyph } from "./ui";
 /** Controller button legend; only shown while a controller is connected. */
 export function HintsBar({ pad, inLayer }: { pad: string; inLayer: boolean }) {
   return (
-    <footer className="relative z-20 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line/60 bg-panel/80 px-8 py-3 text-xs text-muted backdrop-blur lg:px-10">
+    <footer className="relative z-20 flex flex-wrap items-center gap-x-5 gap-y-2 px-8 py-3 text-xs text-muted lg:px-10">
       <Hint glyph="A" label="Select" />
       <Hint glyph="B" label="Back" />
       {!inLayer && (
