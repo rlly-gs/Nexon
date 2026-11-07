@@ -14,11 +14,14 @@ export function useNow(intervalMs: number): number {
 export type PadButton =
   | "up" | "down" | "left" | "right"
   | "a" | "b" | "x" | "y"
-  | "lb" | "rb" | "view" | "start";
+  | "lb" | "rb" | "view" | "start" | "r3";
+
+/** Raw stick positions in [-1, 1] (left x/y, right x/y), reported every frame. */
+export type AxesHandler = (lx: number, ly: number, rx: number, ry: number) => void;
 
 // Gamepad API standard mapping (Xbox controllers, PlayStation via Steam/DS4Windows, etc.)
 const BUTTONS: [PadButton, number][] = [
-  ["a", 0], ["b", 1], ["x", 2], ["y", 3], ["lb", 4], ["rb", 5], ["view", 8], ["start", 9],
+  ["a", 0], ["b", 1], ["x", 2], ["y", 3], ["lb", 4], ["rb", 5], ["view", 8], ["start", 9], ["r3", 11],
 ];
 const REPEATING = new Set<PadButton>(["up", "down", "left", "right"]);
 const FIRST_REPEAT_MS = 380;
@@ -29,9 +32,14 @@ const STICK = 0.55;
  * Reads the controller every frame and calls `handlers` when a button is pressed
  * (directions repeat while held). Returns the connected controller's name.
  */
-export function useGamepad(handlers: Partial<Record<PadButton, () => void>>): string | null {
+export function useGamepad(
+  handlers: Partial<Record<PadButton, () => void>>,
+  onAxes?: AxesHandler,
+): string | null {
   const ref = useRef(handlers);
   ref.current = handlers;
+  const axesRef = useRef(onAxes);
+  axesRef.current = onAxes;
   const [connected, setConnected] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,6 +81,7 @@ export function useGamepad(handlers: Partial<Record<PadButton, () => void>>): st
         press("left", btn(14) || ax < -STICK, now);
         press("right", btn(15) || ax > STICK, now);
         for (const [name, i] of BUTTONS) press(name, btn(i), now);
+        axesRef.current?.(ax, ay, pad.axes[2] ?? 0, pad.axes[3] ?? 0);
       }
       frame = requestAnimationFrame(poll);
     };

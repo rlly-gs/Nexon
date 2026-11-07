@@ -1,4 +1,5 @@
 mod launcher;
+mod palette;
 mod store;
 mod tracker;
 
@@ -151,6 +152,7 @@ async fn add_games(
             cover: None,
             background: None,
             recompiled: false,
+            palette: None,
             added_at: now(),
         });
     }
@@ -230,6 +232,11 @@ fn set_game_image(
         Some(src) => Some(import_image(&state.data_dir, sub, &id, &src)?),
         None => None,
     };
+    // The foil follows the cover's colors, so re-analyze whenever the cover changes.
+    let new_palette = match (&new_image, kind.as_str()) {
+        (Some(path), "cover") => palette::dominant_hues(Path::new(path)),
+        _ => None,
+    };
     let mut store = state.store.lock().unwrap();
     let game = store
         .data
@@ -237,6 +244,9 @@ fn set_game_image(
         .iter_mut()
         .find(|g| g.id == id)
         .ok_or("Game not found.")?;
+    if kind == "cover" {
+        game.palette = new_palette;
+    }
     let slot = if kind == "cover" { &mut game.cover } else { &mut game.background };
     let old = std::mem::replace(slot, new_image);
     store.save()?;
@@ -361,6 +371,39 @@ fn set_avatar(app: AppHandle, state: State<'_, AppState>, image: Option<String>)
     Ok(())
 }
 
+/// Analyzes covers that don't have a palette yet (libraries from older versions).
+fn backfill_palettes(app: AppHandle) {
+    let state = app.state::<AppState>();
+    let pending: Vec<(String, String)> = state
+        .store
+        .lock()
+        .unwrap()
+        .data
+        .games
+        .iter()
+        .filter(|g| g.palette.is_none())
+        .filter_map(|g| g.cover.clone().map(|c| (g.id.clone(), c)))
+        .collect();
+    if pending.is_empty() {
+        return;
+    }
+    let results: Vec<(String, Option<Vec<f32>>)> = pending
+        .into_iter()
+        .map(|(id, cover)| (id, palette::dominant_hues(Path::new(&cover))))
+        .collect();
+
+    let mut store = state.store.lock().unwrap();
+    for (id, hues) in results {
+        if let Some(g) = store.data.games.iter_mut().find(|g| g.id == id) {
+            // Unreadable image: store an empty palette so we don't retry on every start.
+            g.palette = Some(hues.unwrap_or_default());
+        }
+    }
+    let _ = store.save();
+    drop(store);
+    notify(&app);
+}
+
 // ---------------------------------------------------------------------------
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -376,6 +419,8 @@ pub fn run() {
                 running: Mutex::new(HashMap::new()),
                 data_dir,
             });
+            let handle = app.handle().clone();
+            std::thread::spawn(move || backfill_palettes(handle));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

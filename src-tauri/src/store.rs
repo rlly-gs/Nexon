@@ -53,6 +53,9 @@ pub struct Game {
     pub background: Option<String>,
     /// Marked by the user as a recompiled (native PC port) version of the game.
     pub recompiled: bool,
+    /// Dominant hues (0-360) of the cover, used to tint the holographic foil.
+    /// `None` = not analyzed yet; empty = the cover has no strong colors.
+    pub palette: Option<Vec<f32>>,
     pub added_at: i64,
 }
 

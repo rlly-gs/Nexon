@@ -46,6 +46,50 @@
   }
 }
 
+/* ---------- Holographic tile (easter egg) ----------
+   GameTile.tsx updates the custom properties every frame while it's active.
+   --amt: 0 (normal tile) → 1 (holo); --tilt: how far it's tilted; --foil: gradient from the cover colors. */
+@layer components {
+  .holo-shine,
+  .holo-sparkle,
+  .holo-glare {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  /* Foil in the cover's colors that slides as the tile tilts. */
+  .holo-shine {
+    mix-blend-mode: color-dodge;
+    opacity: calc(var(--amt, 0) * (0.3 + var(--tilt, 0) * 0.7) * 0.75);
+    background-image: var(--foil);
+    background-size: 300% 300%;
+    background-position: var(--px, 50%) var(--py, 50%);
+    filter: saturate(1.15) brightness(0.85);
+  }
+  /* Glitter: two offset dot grids that drift against each other. */
+  .holo-sparkle {
+    mix-blend-mode: color-dodge;
+    opacity: calc(var(--amt, 0) * (0.3 + var(--tilt, 0) * 0.7) * 0.65);
+    background-image:
+      radial-gradient(circle, rgb(255 255 255 / 0.9) 0 0.6px, transparent 1.2px),
+      radial-gradient(circle, rgb(255 255 255 / 0.7) 0 0.5px, transparent 1px);
+    background-size: 17px 19px, 23px 21px;
+    background-position: var(--gx, 50%) var(--gy, 50%), var(--py, 50%) var(--px, 50%);
+  }
+  /* Light reflection following the tilt. */
+  .holo-glare {
+    mix-blend-mode: overlay;
+    opacity: calc(var(--amt, 0) * (0.35 + var(--tilt, 0) * 0.65));
+    background: radial-gradient(
+      farthest-corner circle at var(--gx, 50%) var(--gy, 50%),
+      rgb(255 255 255 / 0.7) 0%,
+      rgb(255 255 255 / 0.15) 28%,
+      rgb(0 0 0 / 0.35) 95%
+    );
+  }
+}
+
 @layer utilities {
   .no-scrollbar {
     scrollbar-width: none;

@@ -7,7 +7,7 @@ import { Upload } from "lucide-react";
 import { api, CHANGED_EVENT, errorText, type Game, type Settings, type Snapshot } from "./api";
 import { computeStats, type Stats } from "./stats";
 import { useGamepad, useNow } from "./hooks";
-import { activate, back, focusEl, hasLayer, move, navScope, setRootBack, type Direction } from "./nav";
+import { activate, back, focusEl, hasLayer, move, navScope, pushLayer, setRootBack, type Direction } from "./nav";
 import { applyTheme } from "./theme";
 import { TopBar } from "./components/TopBar";
 import { Carousel } from "./components/Carousel";
@@ -17,6 +17,7 @@ import { EditGameModal } from "./components/EditGameModal";
 import { AppearanceModal } from "./components/AppearanceModal";
 import { ProfileView } from "./components/ProfileView";
 import { HintsBar } from "./components/HintsBar";
+import type { TiltInput } from "./holo";
 
 export type View = "library" | "profile";
 type Toast = { kind: "error" | "info"; text: string };
@@ -50,6 +51,9 @@ export default function App() {
   const [adding, setAdding] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<number>();
+  // Easter egg: the focused tile turns holographic (R3 + stick). Mouse dragging is handled in GameTile.
+  const [holoId, setHoloId] = useState<string | null>(null);
+  const holoInput = useRef<TiltInput>({ x: 0, y: 0, active: false });
 
   const now = useNow(snap?.running.length ? 1000 : 15_000);
   const stats = useMemo(() => (snap ? computeStats(snap, now) : null), [snap, now]);
@@ -222,22 +226,66 @@ export default function App() {
     return () => setRootBack(null);
   }, []);
 
-  const pad = useGamepad({
-    up: () => move("up"),
-    down: () => move("down"),
-    left: () => move("left"),
-    right: () => move("right"),
-    a: activate,
-    b: back,
-    x: () => !hasLayer() && view === "library" && focused && setDetailsId(focused.id),
-    y: () => !hasLayer() && setView((v) => (v === "profile" ? "library" : "profile")),
-    lb: () => !hasLayer() && setView("library"),
-    rb: () => !hasLayer() && setView("profile"),
-    start: fullscreen,
-    view: () => !hasLayer() && setAppearance(true),
-  });
+  /** R3: turn holo mode on for the focused tile, or off if it's on. */
+  const toggleHolo = () => {
+    if (holoId) return setHoloId(null);
+    if (hasLayer() || view !== "library") return;
+    const id = (document.activeElement as HTMLElement | null)?.dataset.gameId;
+    if (!id) return;
+    holoInput.current = { x: 0, y: 0, active: false };
+    setHoloId(id);
+  };
+
+  // B / Esc leave holo mode (registered as a layer, which also pauses X/Y/LB/RB).
+  useEffect(() => {
+    if (!holoId) return;
+    return pushLayer(() => setHoloId(null));
+  }, [holoId]);
+
+  // Leaving the tile (focus moved by mouse, tab switch…) ends holo mode.
+  useEffect(() => {
+    if (holoId && (view !== "library" || focusedId !== holoId)) setHoloId(null);
+  }, [holoId, focusedId, view]);
+
+  // While holo mode is on the sticks tilt the tile instead of moving focus.
+  const nav = (dir: Direction) => () => !holoId && move(dir);
+  const STICK_DEADZONE = 0.15;
+
+  const pad = useGamepad(
+    {
+      up: nav("up"),
+      down: nav("down"),
+      left: nav("left"),
+      right: nav("right"),
+      a: () => (holoId ? setHoloId(null) : activate()),
+      b: back,
+      x: () => !hasLayer() && view === "library" && focused && setDetailsId(focused.id),
+      y: () => !hasLayer() && setView((v) => (v === "profile" ? "library" : "profile")),
+      lb: () => !hasLayer() && setView("library"),
+      rb: () => !hasLayer() && setView("profile"),
+      start: fullscreen,
+      view: () => !hasLayer() && setAppearance(true),
+      r3: toggleHolo,
+    },
+    (lx, ly, rx, ry) => {
+      if (!holoId) return;
+      // Either stick works; use whichever is pushed further.
+      const [x, y] = Math.hypot(lx, ly) >= Math.hypot(rx, ry) ? [lx, ly] : [rx, ry];
+      holoInput.current = { x, y, active: Math.hypot(x, y) > STICK_DEADZONE };
+    },
+  );
+
+  const holoOpen = useRef(false);
+  holoOpen.current = !!holoId;
 
   useEffect(() => {
+    const held = new Set<string>();
+    const updateArrowTilt = () => {
+      const x = (held.has("ArrowRight") ? 1 : 0) - (held.has("ArrowLeft") ? 1 : 0);
+      const y = (held.has("ArrowDown") ? 1 : 0) - (held.has("ArrowUp") ? 1 : 0);
+      holoInput.current = { x: x * 0.8, y: y * 0.8, active: held.size > 0 };
+    };
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -250,13 +298,24 @@ export default function App() {
       const target = e.target as HTMLElement;
       if (target.matches("input, textarea, select")) return;
       const dir = ARROWS[e.key];
-      if (dir) {
-        e.preventDefault();
+      if (!dir) return;
+      e.preventDefault();
+      if (holoOpen.current) {
+        held.add(e.key);
+        updateArrowTilt();
+      } else {
         move(dir);
       }
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (held.delete(e.key)) updateArrowTilt();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   }, [fullscreen]);
 
   // Hovering also moves focus (console-style), except while typing.
@@ -304,13 +363,15 @@ export default function App() {
             onLaunch={launch}
             onDetails={setDetailsId}
             onAdd={addFromDialog}
+            holoId={holoId}
+            tiltInput={holoInput}
           />
         ) : (
           <ProfileView snap={snap} stats={stats} now={now} onError={onError} onOpenGame={openGameInLibrary} />
         )}
       </main>
 
-      {pad && <HintsBar pad={pad} inLayer={!!(detailsGame || editing || appearance)} />}
+      {pad && <HintsBar pad={pad} inLayer={!!(detailsGame || editing || appearance || holoId)} />}
 
       {detailsGame && (
         <DetailsPanel

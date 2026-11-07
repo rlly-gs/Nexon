@@ -18,6 +18,8 @@ export type Game = {
   cover: string | null;
   background: string | null;
   recompiled: boolean;
+  /** Dominant cover hues (0-360); null until analyzed, empty when the cover has no strong colors. */
+  palette: number[] | null;
   addedAt: number;
 };
 

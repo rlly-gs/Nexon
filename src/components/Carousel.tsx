@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, type MutableRefObject } from "react";
 import { Gamepad2, LoaderCircle, Play, Plus } from "lucide-react";
 import type { Game, RunningGame } from "../api";
 import type { Stats } from "../stats";
 import { formatClock, formatDuration, formatRelativeDay } from "../format";
+import type { TiltInput } from "../holo";
 import { focusDefault } from "../nav";
-import { CoverArt } from "./GameArt";
+import { GameTile } from "./GameTile";
 import { btn, LiveDot, RecompiledBadge } from "./ui";
 
 type Props = {
@@ -14,6 +15,9 @@ type Props = {
   running: RunningGame[];
   now: number;
   adding: boolean;
+  /** Tile in holo mode from the controller (easter egg), if any. */
+  holoId: string | null;
+  tiltInput: MutableRefObject<TiltInput>;
   onFocusGame: (id: string) => void;
   onLaunch: (id: string) => void;
   onDetails: (id: string) => void;
@@ -21,7 +25,7 @@ type Props = {
 };
 
 export function Carousel(props: Props) {
-  const { games, focused, stats, running, now, onFocusGame, onLaunch, onDetails } = props;
+  const { games, focused, stats, running, now, holoId, tiltInput, onFocusGame, onLaunch, onDetails } = props;
 
   // When the screen opens, focus the selected game.
   useEffect(() => {
@@ -75,37 +79,28 @@ export function Carousel(props: Props) {
         </div>
       </div>
 
-      <section className="pb-5">
+      <section className="pb-3">
         <div className="flex items-baseline justify-between px-8 lg:px-10">
           <h2 className="text-sm font-medium text-muted">Library</h2>
           <span className="text-xs tabular-nums text-subtle">
             {games.length === 1 ? "1 game" : `${games.length} games`} · {formatDuration(stats.total)}
           </span>
         </div>
-        <div className="no-scrollbar mt-3 flex scroll-px-8 gap-4 overflow-x-auto px-8 pb-3 pt-3 lg:scroll-px-10 lg:px-10">
-          {games.map((g) => {
-            const r = running.find((x) => x.gameId === g.id);
-            return (
-              <button
-                key={g.id}
-                type="button"
-                data-nav
-                data-nav-default={g.id === focused.id || undefined}
-                aria-label={g.name}
-                onFocus={() => onFocusGame(g.id)}
-                onClick={() => onLaunch(g.id)}
-                className="relative aspect-[3/4] w-32 shrink-0 overflow-hidden rounded-lg shadow-sm ring-1 ring-inset ring-white/10 transition-transform focus:-translate-y-1 focus:outline-offset-[3px] xl:w-36"
-              >
-                <CoverArt game={g} showTitle />
-                {r && (
-                  <span className="absolute left-2 top-2 inline-flex items-center gap-x-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-green-400 backdrop-blur">
-                    <LiveDot />
-                    {r.detected ? formatClock(now - r.startedAt) : "Starting"}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Extra vertical padding leaves room for a tile lifted and tilted in holo mode. */}
+        <div className="no-scrollbar mt-1 flex scroll-px-8 gap-4 overflow-x-auto px-8 pb-5 pt-5 lg:scroll-px-10 lg:px-10">
+          {games.map((g) => (
+            <GameTile
+              key={g.id}
+              game={g}
+              isDefault={g.id === focused.id}
+              running={running.find((x) => x.gameId === g.id)}
+              now={now}
+              holo={holoId === g.id}
+              tiltInput={tiltInput}
+              onFocusGame={onFocusGame}
+              onLaunch={onLaunch}
+            />
+          ))}
         </div>
       </section>
     </>
