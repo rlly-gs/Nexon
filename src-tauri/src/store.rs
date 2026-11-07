@@ -51,6 +51,8 @@ pub struct Game {
     pub cover: Option<String>,
     /// Landscape art used as the carousel background (falls back to the cover).
     pub background: Option<String>,
+    /// Marked by the user as a recompiled (native PC port) version of the game.
+    pub recompiled: bool,
     pub added_at: i64,
 }
 

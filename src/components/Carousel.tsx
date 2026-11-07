@@ -5,7 +5,7 @@ import type { Stats } from "../stats";
 import { formatClock, formatDuration, formatRelativeDay } from "../format";
 import { focusDefault } from "../nav";
 import { CoverArt } from "./GameArt";
-import { btn, LiveDot } from "./ui";
+import { btn, LiveDot, RecompiledBadge } from "./ui";
 
 type Props = {
   games: Game[];
@@ -37,9 +37,12 @@ export function Carousel(props: Props) {
   return (
     <>
       <div className="flex max-w-2xl flex-1 flex-col justify-end px-8 pb-6 lg:px-10">
-        <p className="text-sm font-medium text-accent-text">
-          {run ? "Playing now" : stat?.lastPlayed ? "Recently played" : "In your library"}
-        </p>
+        <div className="flex items-center gap-x-3">
+          <p className="text-sm font-medium text-accent-text">
+            {run ? "Playing now" : stat?.lastPlayed ? "Recently played" : "In your library"}
+          </p>
+          {focused.recompiled && <RecompiledBadge />}
+        </div>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight text-fg text-balance lg:text-5xl">{focused.name}</h1>
 
         <dl className="mt-5 flex flex-wrap gap-x-8 gap-y-3">

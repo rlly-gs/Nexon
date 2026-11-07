@@ -17,6 +17,7 @@ export type Game = {
   icon: string | null;
   cover: string | null;
   background: string | null;
+  recompiled: boolean;
   addedAt: number;
 };
 
@@ -63,6 +64,7 @@ export const api = {
   updateGame: (id: string, edit: GameEdit) => invoke<void>("update_game", { id, edit }),
   setImage: (id: string, kind: ImageKind, image: string | null) =>
     invoke<void>("set_game_image", { id, kind, image }),
+  setRecompiled: (id: string, recompiled: boolean) => invoke<void>("set_recompiled", { id, recompiled }),
   updateSettings: (settings: Settings) => invoke<void>("update_settings", { settings }),
   removeGame: (id: string) => invoke<void>("remove_game", { id }),
   launch: (id: string) => invoke<void>("launch_game", { id }),

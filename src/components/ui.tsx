@@ -62,6 +62,15 @@ export function Layer({
   );
 }
 
+/** Tag shown on games marked as Recompiled. */
+export function RecompiledBadge() {
+  return (
+    <span className="inline-flex items-center rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent-text ring-1 ring-inset ring-accent/25">
+      Recompiled
+    </span>
+  );
+}
+
 /** Green "playing now" indicator. */
 export function LiveDot({ className = "" }: { className?: string }) {
   return (

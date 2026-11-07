@@ -150,6 +150,7 @@ async fn add_games(
             icon: info.icon.then(|| icon_out.to_string_lossy().into_owned()),
             cover: None,
             background: None,
+            recompiled: false,
             added_at: now(),
         });
     }
@@ -189,6 +190,22 @@ fn update_game(app: AppHandle, state: State<'_, AppState>, id: String, edit: Gam
     }
     game.args = clean(edit.args);
     game.monitor_exe = clean(edit.monitor_exe);
+    store.save()?;
+    drop(store);
+    notify(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn set_recompiled(app: AppHandle, state: State<'_, AppState>, id: String, recompiled: bool) -> CmdResult<()> {
+    let mut store = state.store.lock().unwrap();
+    let game = store
+        .data
+        .games
+        .iter_mut()
+        .find(|g| g.id == id)
+        .ok_or("Game not found.")?;
+    game.recompiled = recompiled;
     store.save()?;
     drop(store);
     notify(&app);
@@ -365,6 +382,7 @@ pub fn run() {
             get_snapshot,
             add_games,
             update_game,
+            set_recompiled,
             set_game_image,
             remove_game,
             update_settings,

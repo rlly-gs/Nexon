@@ -192,6 +192,21 @@ export default function App() {
     [onError],
   );
 
+  const toggleRecompiled = useCallback(
+    (game: Game) => {
+      const recompiled = !game.recompiled;
+      // Optimistic: flip it right away; the backend event refreshes the snapshot after.
+      setSnap((prev) =>
+        prev ? { ...prev, games: prev.games.map((g) => (g.id === game.id ? { ...g, recompiled } : g)) } : prev,
+      );
+      api.setRecompiled(game.id, recompiled).catch((e) => {
+        onError(e);
+        refresh();
+      });
+    },
+    [onError, refresh],
+  );
+
   const fullscreen = useCallback(() => {
     toggleFullscreen().catch(onError);
   }, [onError]);
@@ -309,6 +324,7 @@ export default function App() {
           onEdit={() => setEditingId(detailsGame.id)}
           onReveal={() => api.reveal(detailsGame.id).catch(onError)}
           onRemove={() => removeGame(detailsGame)}
+          onToggleRecompiled={() => toggleRecompiled(detailsGame)}
         />
       )}
 
