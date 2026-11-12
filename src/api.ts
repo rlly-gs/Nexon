@@ -66,6 +66,7 @@ export const api = {
   updateGame: (id: string, edit: GameEdit) => invoke<void>("update_game", { id, edit }),
   setImage: (id: string, kind: ImageKind, image: string | null) =>
     invoke<void>("set_game_image", { id, kind, image }),
+  relinkGame: (id: string, path: string) => invoke<Game>("relink_game", { id, path }),
   setRecompiled: (id: string, recompiled: boolean) => invoke<void>("set_recompiled", { id, recompiled }),
   updateSettings: (settings: Settings) => invoke<void>("update_settings", { settings }),
   removeGame: (id: string) => invoke<void>("remove_game", { id }),

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ImagePlus, Trash2, X } from "lucide-react";
+import { FileSymlink, ImagePlus, LoaderCircle, Trash2, X } from "lucide-react";
 import { api, fileUrl, type Game, type ImageKind } from "../api";
 import { CoverArt } from "./GameArt";
 import { btn, input, Layer } from "./ui";
@@ -19,8 +19,28 @@ export function EditGameModal({ game, running, onClose, onError }: Props) {
   const [args, setArgs] = useState(game.args ?? "");
   const [monitorExe, setMonitorExe] = useState(game.monitorExe ?? "");
   const [saving, setSaving] = useState(false);
+  const [relinking, setRelinking] = useState(false);
 
   const isShellLaunch = !/\.exe$/i.test(game.target ?? game.path);
+
+  /** Swap the linked file without losing playtime, images or settings. */
+  const relink = async () => {
+    const file = await open({
+      title: `Choose the new file for ${game.name} (.exe, .lnk or .url)`,
+      filters: [{ name: "Games and shortcuts", extensions: ["exe", "lnk", "url"] }],
+    });
+    if (typeof file !== "string" || file === game.path) return;
+    setRelinking(true);
+    try {
+      const updated = await api.relinkGame(game.id, file);
+      // A shortcut may bring its own launch arguments.
+      if (updated.args !== game.args) setArgs(updated.args ?? "");
+    } catch (e) {
+      onError(e);
+    } finally {
+      setRelinking(false);
+    }
+  };
 
   const pickImage = async (kind: ImageKind) => {
     const img = await open({
@@ -106,8 +126,30 @@ export function EditGameModal({ game, running, onClose, onError }: Props) {
               <input id="edit-name" data-nav data-autofocus value={name} onChange={(e) => setName(e.target.value)} className={input} />
             </Field>
 
-            <Field label="Linked file" htmlFor="edit-path" hint={game.target && game.target !== game.path ? `Points to: ${game.target}` : undefined}>
-              <input id="edit-path" value={game.path} readOnly className={`${input} text-muted`} />
+            <Field
+              label="Linked file"
+              htmlFor="edit-path"
+              hint={[
+                game.target && game.target !== game.path ? `Points to: ${game.target}` : null,
+                "Changing the file keeps your playtime, images and settings.",
+              ]
+                .filter(Boolean)
+                .join("\n")}
+            >
+              <div className="flex gap-2">
+                <input id="edit-path" value={game.path} readOnly title={game.path} className={`${input} text-muted`} />
+                <button
+                  type="button"
+                  data-nav
+                  onClick={relink}
+                  disabled={relinking || running}
+                  title={running ? "Close the game before changing its file" : "Link a different .exe, .lnk or .url"}
+                  className={btn.small}
+                >
+                  {relinking ? <LoaderCircle className="size-4 animate-spin" /> : <FileSymlink className="size-4" />}
+                  Change
+                </button>
+              </div>
             </Field>
 
             {!isShellLaunch && (
@@ -165,7 +207,7 @@ function Field({ label, htmlFor, hint, children }: { label: string; htmlFor: str
         {label}
       </label>
       <div className="mt-2">{children}</div>
-      {hint && <p className="mt-2 break-words text-xs leading-5 text-muted">{hint}</p>}
+      {hint && <p className="mt-2 whitespace-pre-line break-words text-xs leading-5 text-muted">{hint}</p>}
     </div>
   );
 }

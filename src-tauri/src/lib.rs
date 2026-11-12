@@ -198,6 +198,73 @@ fn update_game(app: AppHandle, state: State<'_, AppState>, id: String, edit: Gam
     Ok(())
 }
 
+/// Points an existing game at a different .exe/.lnk/.url, keeping its id,
+/// sessions (playtime), images and flags.
+#[tauri::command]
+async fn relink_game(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    path: String,
+) -> CmdResult<Game> {
+    let new_path = PathBuf::from(&path);
+    if !matches!(launcher::ext_lower(&new_path).as_str(), "exe" | "lnk" | "url") {
+        return Err("Use an .exe, .lnk or .url file.".into());
+    }
+    if !new_path.is_file() {
+        return Err("File not found.".into());
+    }
+    if state.running.lock().unwrap().contains_key(&id) {
+        return Err("Close the game before changing its file.".into());
+    }
+    {
+        let store = state.store.lock().unwrap();
+        if !store.data.games.iter().any(|g| g.id == id) {
+            return Err("Game not found.".into());
+        }
+        if let Some(other) = store
+            .data
+            .games
+            .iter()
+            .find(|g| g.id != id && g.path.eq_ignore_ascii_case(&path))
+        {
+            return Err(format!("That file is already linked to \"{}\".", other.name));
+        }
+    }
+
+    // Inspect outside the lock (PowerShell takes a moment). New icon file name so the UI doesn't show a cached one.
+    let icons_dir = state.data_dir.join("icons");
+    fs::create_dir_all(&icons_dir).map_err(|e| e.to_string())?;
+    let icon_out = icons_dir.join(format!("{id}-{}.png", now_millis()));
+    let info = launcher::inspect(&new_path, &icon_out);
+
+    let mut store = state.store.lock().unwrap();
+    let game = store
+        .data
+        .games
+        .iter_mut()
+        .find(|g| g.id == id)
+        .ok_or("Game not found.")?;
+    game.path = path;
+    game.target = info.target;
+    game.working_dir = info.working_dir;
+    // A shortcut brings its own arguments; otherwise keep the ones the user set.
+    if info.args.is_some() {
+        game.args = info.args;
+    }
+    let old_icon = if info.icon {
+        std::mem::replace(&mut game.icon, Some(icon_out.to_string_lossy().into_owned()))
+    } else {
+        None
+    };
+    let updated = game.clone();
+    store.save()?;
+    drop(store);
+    remove_owned_file(&state.data_dir, old_icon.as_deref());
+    notify(&app);
+    Ok(updated)
+}
+
 #[tauri::command]
 fn set_recompiled(app: AppHandle, state: State<'_, AppState>, id: String, recompiled: bool) -> CmdResult<()> {
     let mut store = state.store.lock().unwrap();
@@ -427,6 +494,7 @@ pub fn run() {
             get_snapshot,
             add_games,
             update_game,
+            relink_game,
             set_recompiled,
             set_game_image,
             remove_game,
